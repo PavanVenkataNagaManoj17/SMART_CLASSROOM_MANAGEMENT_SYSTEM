@@ -15,6 +15,7 @@ const Attendance = require('./models/Attendance');
 dotenv.config();
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -23,8 +24,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/teachers', teacherRoutes);
-
-const PORT = process.env.PORT || 5000;
 
 sequelize.authenticate()
     .then(() => {

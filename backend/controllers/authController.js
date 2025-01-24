@@ -5,11 +5,27 @@ const Student = require('../models/Student');
 const Teacher = require('../models/Teacher');
 
 exports.signup = async (req, res) => {
-    const { email, password, role } = req.body;
-
     try {
+        const { email, password, role } = req.body;
+
+        // Check if user exists
+        const existingUser = await User.findOne({ where: { email } });
+        if (existingUser) {
+            return res.status(400).json({
+                success: false,
+                message: 'User already exists'
+            });
+        }
+
+        // Hash password
         const hashedPassword = await bcrypt.hash(password, 12);
-        const user = await User.create({ email, password: hashedPassword, role });
+
+        // Create user
+        const user = await User.create({
+            email,
+            password: hashedPassword,
+            role
+        });
 
         if (role === 'student') {
             await Student.create({ userId: user.id });
@@ -17,38 +33,60 @@ exports.signup = async (req, res) => {
             await Teacher.create({ userId: user.id });
         }
 
-        res.status(201).json({ message: 'User created successfully' });
+        // Generate token
+        const token = jwt.sign(
+            { userId: user.id, role: user.role },
+            'your_jwt_secret',  // Replace with process.env.JWT_SECRET in production
+            { expiresIn: '1h' }
+        );
+
+        // Return success response
+        return res.status(201).json({
+            success: true,
+            message: 'User created successfully',
+            data: {
+                userId: user.id,
+                email: user.email,
+                role: user.role,
+                token
+            }
+        });
+
     } catch (error) {
-        console.error('Signup error:', error); // Debugging log
-        res.status(500).json({ error: 'Server error' });
+        console.error('Signup error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Error creating user',
+            error: error.message
+        });
     }
 };
 
 exports.login = async (req, res) => {
-    const { email, password } = req.body;
-
     try {
-        console.log('Login attempt:', email); // Debugging log
+        const { email, password } = req.body;
+
+        // Find user
         const user = await User.findOne({ where: { email } });
         if (!user) {
-            console.log('User not found:', email); // Debugging log
-            return res.status(401).json({ error: 'Invalid credentials' });
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        console.log('Stored password hash:', user.password); // Debugging log
-        console.log('Provided password:', password); // Debugging log
-
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            console.log('Password does not match for user:', email); // Debugging log
-            return res.status(401).json({ error: 'Invalid credentials' });
+        // Check password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ userId: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
+        // Generate token
+        const token = jwt.sign(
+            { userId: user.id, role: user.role },
+            'your_jwt_secret',
+            { expiresIn: '1h' }
+        );
 
-        res.status(200).json({ token, role: user.role });
+        res.json({ token, userId: user.id, role: user.role });
     } catch (error) {
-        console.error('Login error:', error); // Debugging log
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ message: 'Error logging in' });
     }
 };
